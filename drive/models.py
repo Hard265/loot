@@ -2,6 +2,7 @@ import uuid
 import os
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.core.validators import RegexValidator
 
 User = get_user_model()
 
@@ -24,7 +25,10 @@ class Folder(models.Model):
         blank=True,
         related_name="folders",
     )
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=255, validators=[RegexValidator(
+            regex=r'^[a-zA-Z0-9_\-\.]+$',
+            message='Invalid folder name'
+        )])
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
