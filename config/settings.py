@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "accounts",
     "drive",
     "rest_framework",
+    "graphene_django",
 ]
 
 MIDDLEWARE = [
@@ -40,6 +41,18 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+
+GRAPHENE = {
+    "SCHEMA": "drive.schema.schema",
+    "MIDDLEWARE": [
+        "graphql_jwt.middleware.JSONWebTokenMiddleware",
+    ],
+}
+
+AUTHENTICATION_BACKENDS = [
+    "graphql_jwt.backends.JSONWebTokenBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 TEMPLATES = [
     {
