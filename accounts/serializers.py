@@ -10,6 +10,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.core.mail import send_mail
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 User = get_user_model()
@@ -20,6 +21,16 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email"]
+
+class TokenObtainSerializer(TokenObtainPairSerializer):
+     def validate(self, attrs):
+        data =  super().validate(attrs)
+        
+        return {
+            "id": self.user.id,
+            "email": self.user.email,
+            "token": data
+        }
 
 
 class LoginSerializer(serializers.Serializer):
