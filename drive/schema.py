@@ -6,6 +6,7 @@ from graphql_jwt.decorators import login_required
 from graphene_django import DjangoObjectType
 from graphene_file_upload.scalars import Upload
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from .models import Folder, File, Share, ShareLink
 
@@ -15,10 +16,9 @@ User = get_user_model()
 class FileType(DjangoObjectType):
     class Meta:
         model = File
-        fields = ("id", "user", "folder", "name", "file", "mime_type", "size", "created_at")
+        fields = ("id", "user", "folder", "name", "file", "mime_type", "size", "created_at", "shares", "share_links")
 
     def resolve_file(self, info):
-        request = info.context
         if self.file:
             return self.file.url
         return None
@@ -49,6 +49,11 @@ class ShareLinkUnion(graphene.Union):
         types = (FileType, FolderType)
         description = "Returns a File or Folder depending on what was shared"
 
+class ContentUnion(graphene.Union):
+    class Meta:
+        types = (FileType, FolderType)
+        description = "Returns either a File or a Folder"
+
 class UserType(DjangoObjectType):
     class Meta:
         model = User
@@ -69,7 +74,14 @@ class Query(graphene.ObjectType):
         token=graphene.UUID(required=True),
         password=graphene.String(required=False)
     )
-
+    search = graphene.List(
+        graphene.Union.of(FileType, FolderType),
+        query=graphene.String(required=True)
+    )
+    contents = graphene.List(
+        ContentUnion,
+        folder_id=graphene.UUID(required=False)
+    )
 
     @login_required
     def resolve_viewer(self, info):
@@ -110,7 +122,7 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_share_links(self, info):
         return ShareLink.objects.filter(created_by=info.context.user)
-    
+
     def resolve_share_link(self, info, token, password=None):
         try:
             link = ShareLink.objects.select_related("file", "folder").get(id=token, is_active=True)
@@ -125,6 +137,41 @@ class Query(graphene.ObjectType):
 
         link.increment_download_count()
         return link.file if link.file else link.folder
+
+    @login_required
+    def resolve_search(self, info, query):
+        user = info.context.user
+        file_results = File.objects.filter(
+            user=user,
+            name__icontains=query  # Case-insensitive search
+        )
+        folder_results = Folder.objects.filter(
+            user=user,
+            name__icontains=query
+        )
+        return list(file_results) + list(folder_results)
+
+    @login_required
+    def resolve_contents(self, info, folder_id=None):
+        user = info.context.user
+        items = []
+        if folder_id:
+            try:
+                folder = Folder.objects.get(pk=folder_id, user=user)
+                files = File.objects.filter(user=user, folder=folder)
+                folders = Folder.objects.filter(user=user, parent_folder=folder)
+                items.extend(list(files))
+                items.extend(list(folders))
+            except Folder.DoesNotExist:
+                raise GraphQLError("Folder not found or unauthorized")
+        else:
+            # Fetch root level contents (files with no folder and folders with no parent)
+            files = File.objects.filter(user=user, folder__isnull=True)
+            folders = Folder.objects.filter(user=user, parent_folder__isnull=True)
+            items.extend(list(files))
+            items.extend(list(folders))
+        return items
+
 
 # Mutations
 class UpdateFileMutation(graphene.Mutation):
@@ -231,18 +278,25 @@ class UpdateFolderMutation(graphene.Mutation):
         folder.save()
         return UpdateFolderMutation(folder=folder)
 
+PERMISSION_CHOICES = ["VIEW", "EDIT", "MANAGE"]
+
+def validate_permission(permission):
+    if permission not in PERMISSION_CHOICES:
+        raise GraphQLError(f"Invalid permission. Allowed values are: {', '.join(PERMISSION_CHOICES)}")
+
 class CreateShare(graphene.Mutation):
     class Arguments:
         file_id = graphene.UUID(required=False)
         folder_id = graphene.UUID(required=False)
         shared_with_id = graphene.UUID(required=True)
-        permission = graphene.String(default_value="view")
+        permission = graphene.String(default_value="VIEW")
         expires_at = graphene.DateTime(required=False)
 
     share = graphene.Field(ShareType)
 
     @login_required
     def mutate(self, info, shared_with_id, permission, file_id=None, folder_id=None, expires_at=None):
+        validate_permission(permission)
         user = info.context.user
         shared_with = User.objects.get(pk=shared_with_id)
 
@@ -261,7 +315,7 @@ class CreateShare(graphene.Mutation):
                 expires_at=expires_at
             )
         else:
-            raise Exception("Must provide file_id or folder_id")
+            raise GraphQLError("Must provide file_id or folder_id")
 
         return CreateShare(share=share)
 
@@ -269,7 +323,7 @@ class CreateShareLink(graphene.Mutation):
     class Arguments:
         file_id = graphene.UUID(required=False)
         folder_id = graphene.UUID(required=False)
-        permission = graphene.String(default_value="view")
+        permission = graphene.String(default_value="VIEW")
         expires_at = graphene.DateTime(required=False)
         password = graphene.String(required=False)
 
@@ -277,6 +331,7 @@ class CreateShareLink(graphene.Mutation):
 
     @login_required
     def mutate(self, info, permission, file_id=None, folder_id=None, expires_at=None, password=None):
+        validate_permission(permission)
         user = info.context.user
 
         if file_id:
@@ -296,9 +351,92 @@ class CreateShareLink(graphene.Mutation):
                 password=password
             )
         else:
-            raise Exception("Must provide file_id or folder_id")
+            raise GraphQLError("Must provide file_id or folder_id")
 
         return CreateShareLink(share_link=link)
+
+class UpdateShareMutation(graphene.Mutation):
+    class Arguments:
+        id = graphene.UUID(required=True)
+        permission = graphene.String(required=False)
+        expires_at = graphene.DateTime(required=False)
+        is_active = graphene.Boolean(required=False)
+
+    share = graphene.Field(ShareType)
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        user = info.context.user
+        share = Share.objects.filter(pk=id, shared_by=user).first()
+        if not share:
+            raise GraphQLError("Share not found or unauthorized")
+
+        if 'permission' in kwargs and kwargs['permission'] is not None:
+            validate_permission(kwargs['permission'])
+
+        allowed_fields = {'permission', 'expires_at', 'is_active'}
+        for key, value in kwargs.items():
+            if key in allowed_fields and value is not None:
+                setattr(share, key, value)
+        share.save()
+        return UpdateShareMutation(share=share)
+
+class DeleteShareMutation(graphene.Mutation):
+    class Arguments:
+        id = graphene.UUID(required=True)
+
+    success = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id):
+        user = info.context.user
+        share = Share.objects.filter(pk=id, shared_by=user).first()
+        if share:
+            share.delete()
+            return DeleteShareMutation(success=True)
+        return DeleteShareMutation(success=False)
+
+class UpdateShareLinkMutation(graphene.Mutation):
+    class Arguments:
+        id = graphene.UUID(required=True)
+        permission = graphene.String(required=False)
+        expires_at = graphene.DateTime(required=False)
+        password = graphene.String(required=False)
+        is_active = graphene.Boolean(required=False)
+
+    share_link = graphene.Field(ShareLinkType)
+
+    @login_required
+    def mutate(self, info, id, **kwargs):
+        user = info.context.user
+        share_link = ShareLink.objects.filter(pk=id, created_by=user).first()
+        if not share_link:
+            raise GraphQLError("Share link not found or unauthorized")
+
+        if 'permission' in kwargs and kwargs['permission'] is not None:
+            validate_permission(kwargs['permission'])
+
+        allowed_fields = {'permission', 'expires_at', 'password', 'is_active'}
+        for key, value in kwargs.items():
+            if key in allowed_fields and value is not None:
+                setattr(share_link, key, value)
+        share_link.save()
+        return UpdateShareLinkMutation(share_link=share_link)
+
+class DeleteShareLinkMutation(graphene.Mutation):
+    class Arguments:
+        id = graphene.UUID(required=True)
+
+    success = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id):
+        user = info.context.user
+        share_link = ShareLink.objects.filter(pk=id, created_by=user).first()
+        if share_link:
+            share_link.delete()
+            return DeleteShareLinkMutation(success=True)
+        return DeleteShareLinkMutation(success=False)
 
 # Schema mutation registry
 class Mutation(graphene.ObjectType):
@@ -310,6 +448,10 @@ class Mutation(graphene.ObjectType):
     update_folder = UpdateFolderMutation.Field()
     create_share = CreateShare.Field()
     create_share_link = CreateShareLink.Field()
+    update_share = UpdateShareMutation.Field()
+    delete_share = DeleteShareMutation.Field()
+    update_share_link = UpdateShareLinkMutation.Field()
+    delete_share_link = DeleteShareLinkMutation.Field()
 
     # JWT auth
     token_auth = graphql_jwt.ObtainJSONWebToken.Field()
@@ -319,3 +461,4 @@ class Mutation(graphene.ObjectType):
 
 # Final schema
 schema = graphene.Schema(query=Query, mutation=Mutation)
+
