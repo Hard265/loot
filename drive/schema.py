@@ -75,7 +75,7 @@ class Query(graphene.ObjectType):
         password=graphene.String(required=False)
     )
     search = graphene.List(
-        graphene.Union.of(FileType, FolderType),
+    ContentUnion,
         query=graphene.String(required=True)
     )
 
