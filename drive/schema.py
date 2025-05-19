@@ -78,10 +78,6 @@ class Query(graphene.ObjectType):
         graphene.Union.of(FileType, FolderType),
         query=graphene.String(required=True)
     )
-    contents = graphene.List(
-        ContentUnion,
-        folder_id=graphene.UUID(required=False)
-    )
 
     @login_required
     def resolve_viewer(self, info):
@@ -150,27 +146,6 @@ class Query(graphene.ObjectType):
             name__icontains=query
         )
         return list(file_results) + list(folder_results)
-
-    @login_required
-    def resolve_contents(self, info, folder_id=None):
-        user = info.context.user
-        items = []
-        if folder_id:
-            try:
-                folder = Folder.objects.get(pk=folder_id, user=user)
-                files = File.objects.filter(user=user, folder=folder)
-                folders = Folder.objects.filter(user=user, parent_folder=folder)
-                items.extend(list(files))
-                items.extend(list(folders))
-            except Folder.DoesNotExist:
-                raise GraphQLError("Folder not found or unauthorized")
-        else:
-            # Fetch root level contents (files with no folder and folders with no parent)
-            files = File.objects.filter(user=user, folder__isnull=True)
-            folders = Folder.objects.filter(user=user, parent_folder__isnull=True)
-            items.extend(list(files))
-            items.extend(list(folders))
-        return items
 
 
 # Mutations
