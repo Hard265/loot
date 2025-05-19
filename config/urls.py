@@ -10,7 +10,7 @@ from django.conf.urls.static import static
 from django.views.decorators.csrf import csrf_exempt
 from graphene_file_upload.django import FileUploadGraphQLView
 
-from drive.views import FolderViewSet, FileViewSet
+from drive.views import FolderViewSet, FileViewSet, ShareLinkAPIView
 from accounts.views import (
     TokenObtainView,
     RegisterView,
@@ -35,10 +35,11 @@ urlpatterns = [
     path("api/v1/token/verify/", TokenVerifyView.as_view(), name="token-verify"),
     path("api/v1/register/", RegisterView.as_view(), name="register"),
     # Password reset routes
-    path("api/v1/password-reset/", PasswordResetView.as_view(), name="password-reset"),
-    path("api/v1/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
+    path("api/password-reset/", PasswordResetView.as_view(), name="password-reset"),
+    path("api/password-reset/confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
     # User routes
-    path("api/v1/user/", UserDetailView.as_view(), name="user-detail"),
+    path("api/user/", UserDetailView.as_view(), name="user-detail"),
     # API routes
-    path("api/v1/", include(router.urls)),
+    path("api/", include(router.urls)),
+    path("api/share/<uuid:token>/", ShareLinkAPIView.as_view(), name="share-link"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

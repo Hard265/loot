@@ -1,10 +1,13 @@
-from rest_framework import viewsets
+from datetime import datetime
+from rest_framework import status, viewsets
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 
-from .models import Folder, File
+from .models import Folder, File, ShareLink
 from .serializers import FolderSerializer, FileSerializer
 
 
@@ -83,3 +86,27 @@ class FileViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class ShareLinkAPIView(APIView):
+    def get(self, request, token):
+        share_link = get_object_or_404(ShareLink, id=token, is_active=True)
+
+        # Check expiration
+        if share_link.expires_at and share_link.expires_at < datetime.now():
+            return Response({"detail": "Link has expired."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Check password (optional)
+        if share_link.password:
+            provided = request.GET.get("password")
+            if not provided or provided != share_link.password:
+                return Response({"detail": "Password required or incorrect."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Serialize file or folder
+        if share_link.file:
+            data = FileSerializer(share_link.file).data
+            return Response({"type": "file", "data": data})
+        else:
+            data = FolderSerializer(share_link.folder).data
+            return Response({"type": "folder", "data": data})
+

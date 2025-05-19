@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from .models import Folder, File
-from django.contrib.auth import get_user_model
 
 class FolderSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(read_only=True)
@@ -14,4 +13,4 @@ class FileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = File
-        fields = ["id", "folder", "name", "file", "size", "created_at"]
+        fields = ["id", "folder", "name", "file", "size","mime_type", "created_at"]
