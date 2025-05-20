@@ -16,17 +16,45 @@ User = get_user_model()
 class FileType(DjangoObjectType):
     class Meta:
         model = File
-        fields = ("id", "user", "folder", "name", "file", "mime_type", "size", "created_at", "shares", "share_links")
+        fields = ("id", "user", "folder", "name", "file", "mime_type", "size", "created_at", "shares", "share_links", "has_shares", "has_share_links")
+    
+    has_shares = graphene.Boolean();
+    has_share_links = graphene.Boolean();
 
     def resolve_file(self, info):
         if self.file:
             return self.file.url
         return None
 
+    def resolve_has_shares(self, info):
+        # only for this file owner
+        if self.user != info.context.user:
+            return False
+        return self.shares.exists()
+
+    def resolve_has_share_links(self, info):
+        # only for this file owner
+        if self.user != info.context.user:
+            return False
+        return self.share_links.exists()
+
 class FolderType(DjangoObjectType):
     class Meta:
         model = Folder
-        fields = ("id", "name", "user", "parent_folder", "created_at", "files", "folders")
+        fields = ("id", "name", "user", "parent_folder", "created_at", "has_shares", "has_share_links", "files", "folders")
+
+    has_shares = graphene.Boolean();
+    has_share_links = graphene.Boolean();
+
+    def resolve_has_shares(self, info):
+        if self.user != info.context.user:
+            return False
+        return self.shares.exists()
+
+    def resolve_has_share_links(self, info):
+        if self.user != info.context.user:
+            return False
+        return self.share_links.exists()
 
 class ShareType(DjangoObjectType):
     class Meta:
@@ -75,8 +103,12 @@ class Query(graphene.ObjectType):
         password=graphene.String(required=False)
     )
     search = graphene.List(
-    ContentUnion,
+        ContentUnion,
         query=graphene.String(required=True)
+    )
+    contents = graphene.List(
+        ContentUnion,
+        folder_id=graphene.UUID(required=False)
     )
 
     @login_required
@@ -147,6 +179,26 @@ class Query(graphene.ObjectType):
         )
         return list(file_results) + list(folder_results)
 
+    @login_required
+    def resolve_contents(self, info, folder_id=None):
+        user = info.context.user
+        items = []
+        if folder_id:
+            try:
+                folder = Folder.objects.get(pk=folder_id, user=user)
+                files = File.objects.filter(user=user, folder=folder)
+                folders = Folder.objects.filter(user=user, parent_folder=folder)
+                items.extend(list(files))
+                items.extend(list(folders))
+            except Folder.DoesNotExist:
+                raise GraphQLError("Folder not found or unauthorized")
+        else:
+            # Fetch root level contents (files with no folder and folders with no parent)
+            files = File.objects.filter(user=user, folder__isnull=True)
+            folders = Folder.objects.filter(user=user, parent_folder__isnull=True)
+            items.extend(list(files))
+            items.extend(list(folders))
+        return items
 
 # Mutations
 class UpdateFileMutation(graphene.Mutation):
