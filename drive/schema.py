@@ -41,7 +41,7 @@ class FileType(DjangoObjectType):
 class FolderType(DjangoObjectType):
     class Meta:
         model = Folder
-        fields = ("id", "name", "user", "parent_folder", "created_at", "has_shares", "has_share_links", "files", "folders")
+        fields = ("id", "name", "user", "parent_folder", "created_at", "shares", "share_links", "has_shares", "has_share_links", "files", "folders")
 
     has_shares = graphene.Boolean();
     has_share_links = graphene.Boolean();
