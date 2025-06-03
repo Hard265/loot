@@ -231,13 +231,18 @@ class CreateFileMutation(graphene.Mutation):
     def mutate(self, info, file, name=None, folder_id=None):
         user = info.context.user
         folder = user.folders.filter(pk=folder_id).first() if folder_id else None
-        file_instance = File.objects.create(
+        file_instance = File(
             user=user,
             name=name or file.name,
             folder=folder,
             file=file,
             size=file.size
         )
+        try:
+            file_instance.full_clean()  # Validate the file instance
+            file_instance.save()
+        except Exception as e:
+            raise GraphQLError(f"Error creating file: {str(e)}")
         return CreateFileMutation(file=file_instance)
 
 
@@ -268,7 +273,13 @@ class CreateFolderMutation(graphene.Mutation):
     def mutate(self, info, name, parent_folder_id=None):
         user = info.context.user
         parent = user.folders.filter(pk=parent_folder_id).first() if parent_folder_id else None
-        folder = Folder.objects.create(user=user, name=name, parent_folder=parent)
+        folder = Folder(user=user, name=name, parent_folder=parent)
+        try:
+            folder.full_clean()  # Validate the folder
+            folder.save()
+        except Exception as e:
+            raise GraphQLError(f"Error creating folder: {str(e)}")
+
         return CreateFolderMutation(folder=folder)
 
 
