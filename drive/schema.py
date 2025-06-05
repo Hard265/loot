@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 
 from .models import Folder, File, Share, ShareLink
+from .forms import RegistrationForm
 
 User = get_user_model()
 
@@ -474,17 +475,19 @@ class DeleteShareLinkMutation(graphene.Mutation):
 class RegisterMutation(graphene.Mutation):
     class Arguments:
         email = graphene.String(required=True)
-        password = graphene.String(required=True)
+        password1 = graphene.String(required=True)
+        password2 = graphene.String(required=True)
 
     user = graphene.Field(UserType)
     token_auth = graphene.Field(graphql_jwt.ObtainJSONWebToken)
 
-    def mutate(self, info, email, password):
-        try:
-            validate_password(password)
-        except ValidationError as e:
-            raise GraphQLError(e.messages)
-
+    def mutate(self, info, email, password1, password2):
+        # Validate form data
+        form = RegistrationForm(data={'email': email, 'password1': password1, 'password2': password2})
+        if not form.is_valid():
+            errors = dict(form.errors)
+            raise GraphQLError(errors)
+        
         user = User.objects.create_user(email=email, password=password)
         return RegisterMutation(user=user, token_auth=graphql_jwt.ObtainJSONWebToken.mutate(None, info, email=email, password=password))
 
