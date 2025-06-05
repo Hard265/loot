@@ -47,7 +47,6 @@ pyOpenSSL==25.1.0
 pytest==8.3.5
 pytest-django==4.11.1
 python-dateutil==2.9.0.post0
-python-environ==0.4.54
 python-magic==0.4.27
 Rx==1.6.3
 service-identity==24.2.0
