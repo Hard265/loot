@@ -6,7 +6,8 @@ from graphql_jwt.decorators import login_required
 from graphene_django import DjangoObjectType
 from graphene_file_upload.scalars import Upload
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
 
 from .models import Folder, File, Share, ShareLink
 
@@ -41,7 +42,7 @@ class FileType(DjangoObjectType):
 class FolderType(DjangoObjectType):
     class Meta:
         model = Folder
-        fields = ("id", "name", "user", "parent_folder", "created_at", "has_shares", "has_share_links", "files", "folders")
+        fields = ("id", "name", "user", "parent_folder", "created_at", "shares", "share_links", "has_shares", "has_share_links", "files", "folders")
 
     has_shares = graphene.Boolean();
     has_share_links = graphene.Boolean();
@@ -198,6 +199,7 @@ class Query(graphene.ObjectType):
             folders = Folder.objects.filter(user=user, parent_folder__isnull=True)
             items.extend(list(files))
             items.extend(list(folders))
+
         return items
 
 # Mutations
@@ -231,18 +233,13 @@ class CreateFileMutation(graphene.Mutation):
     def mutate(self, info, file, name=None, folder_id=None):
         user = info.context.user
         folder = user.folders.filter(pk=folder_id).first() if folder_id else None
-        file_instance = File(
+        file_instance = File.objects.create(
             user=user,
             name=name or file.name,
             folder=folder,
             file=file,
             size=file.size
         )
-        try:
-            file_instance.full_clean()  # Validate the file instance
-            file_instance.save()
-        except Exception as e:
-            raise GraphQLError(f"Error creating file: {str(e)}")
         return CreateFileMutation(file=file_instance)
 
 
@@ -273,15 +270,13 @@ class CreateFolderMutation(graphene.Mutation):
     def mutate(self, info, name, parent_folder_id=None):
         user = info.context.user
         parent = user.folders.filter(pk=parent_folder_id).first() if parent_folder_id else None
-        folder = Folder(user=user, name=name, parent_folder=parent)
         try:
-            folder.full_clean()  # Validate the folder
+            folder = Folder(user=user, name=name, parent_folder=parent)
+            folder.full_clean()
             folder.save()
-        except Exception as e:
-            raise GraphQLError(f"Error creating folder: {str(e)}")
-
-        return CreateFolderMutation(folder=folder)
-
+            return CreateFolderMutation(folder=folder)
+        except ValidationError as e:
+            raise Exception(e.messages)
 
 class DeleteFolderMutation(graphene.Mutation):
     class Arguments:
@@ -476,6 +471,23 @@ class DeleteShareLinkMutation(graphene.Mutation):
             return DeleteShareLinkMutation(success=True)
         return DeleteShareLinkMutation(success=False)
 
+class RegisterMutation(graphene.Mutation):
+    class Arguments:
+        email = graphene.String(required=True)
+        password = graphene.String(required=True)
+
+    user = graphene.Field(UserType)
+    token_auth = graphene.Field(graphql_jwt.ObtainJSONWebToken)
+
+    def mutate(self, info, email, password):
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            raise GraphQLError(e.messages)
+
+        user = User.objects.create_user(email=email, password=password)
+        return RegisterMutation(user=user, token_auth=graphql_jwt.ObtainJSONWebToken.mutate(None, info, email=email, password=password))
+
 # Schema mutation registry
 class Mutation(graphene.ObjectType):
     update_file = UpdateFileMutation.Field()
@@ -490,7 +502,7 @@ class Mutation(graphene.ObjectType):
     delete_share = DeleteShareMutation.Field()
     update_share_link = UpdateShareLinkMutation.Field()
     delete_share_link = DeleteShareLinkMutation.Field()
-
+    register = RegisterMutation.Field() # Add the new mutation
     # JWT auth
     token_auth = graphql_jwt.ObtainJSONWebToken.Field()
     verify_token = graphql_jwt.Verify.Field()
@@ -499,4 +511,3 @@ class Mutation(graphene.ObjectType):
 
 # Final schema
 schema = graphene.Schema(query=Query, mutation=Mutation)
-

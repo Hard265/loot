@@ -1,11 +1,12 @@
 import uuid
-from django.core.exceptions import ValidationError
 import os
 import magic
 from django.db import models
 from django.db.models import UniqueConstraint, Q
 from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
+from django.core.exceptions import ValidationError
+from django.contrib.auth.hashers import make_password, check_password
 
 from drive.managers import FileQuerySet, FolderQuerySet
 
@@ -450,6 +451,19 @@ class ShareLink(models.Model):
             raise ValidationError("You must share either a file or a folder.")
         if self.file and self.folder:
             raise ValidationError("You cannot share both a file and a folder at the same time.")
+
+    def set_password(self, password):
+        """Set a password for the share link."""
+        if password:
+            self.password = make_password(password)
+        else:
+            self.password = None
+
+    def check_password(self, password):
+        """Check if the provided password matches the stored password."""
+        if not self.password:
+            return False
+        return check_password(password, self.password)
 
     def get_absolute_url(self):
         """Get the public URL for this share link."""
