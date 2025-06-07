@@ -25,9 +25,11 @@ router.register("folders", FolderViewSet, basename="folder")
 router.register("files", FileViewSet, basename="file")
 
 urlpatterns = [
+    path("", include("accounts.urls")),
+    path("", include("drive.urls")),
+
     # Admin routes
     path("admin/", admin.site.urls),
-
     path("graphql/", csrf_exempt(FileUploadGraphQLView.as_view(graphiql=True))),
     # Authentication routes
     path("api/v1/token/", TokenObtainView.as_view(), name="token"),

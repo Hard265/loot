@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %} {{folder.name}} {% endblock %}
+{% block content %}
+<div class="p-4">
+    <h3 class="px-4 py-6 text-center text-4xl font-[RoobertBold]">{{folder.name}}</h3>
+    {% include 'partials/folder-contents.html' with items=contents %}
+</div>
+{% endblock %}

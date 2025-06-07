@@ -1,0 +1,61 @@
+{% load filters %}
+<div>
+    <nav class="py-2 mb-2">
+        <p class="text-base font-[RoobertMedium] flex flex-row items-center gap-x-4">
+            <label for="check-{{item.id}}" class="flex items-center">
+                <input id="check-{{item.id}}" type="checkbox" class="peer hidden" />
+                <span class="w-4 h-4 peer-checked:bg-indigo-500 border-2  border-neutral-300 dark:border-neutral-600 peer-checked:border-indigo-500 ring-offset-2 peer-focus:ring peer-focus:ring-indigo-400  rounded flex items-center justify-center cursor-pointer"/>
+            </label>
+            <span>Name</span>
+        </p>
+    </nav>
+    {% if items.folders or items.files %}
+    <ol class="">
+        {% for item in items.folders %}
+        <li class="group" id="{{item.id}}">
+            <a href="{% url 'folder' pk=item.id %}" class="active:bg-indigo-500">
+                <div class="flex flex-row gap-x-4">
+                    <label for="check-{{item.id}}" class="flex items-center">
+                        <input id="check-{{item.id}}" type="checkbox" class="peer hidden" />
+                        <span 
+                            class="w-4 h-4 peer-checked:bg-indigo-500 border-2  border-neutral-300 dark:border-neutral-600 peer-checked:border-indigo-500 ring-offset-2 peer-focus:ring peer-focus:ring-indigo-400  rounded flex items-center justify-center cursor-pointer">
+                    </label>
+                    <div class="flex-1 flex flex-row items-center gap-4 py-1.5 border-b group-first:border-y border-neutral-300 dark:border-neutral-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-folder"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        <div class="flex-1">
+                            <h4 class="font-[NeueMontrealMedium]">{{item.name}}</h4>
+                            <span class="text-sm opacity-75">{{item.created_at|format_date:"%b %d %a, %Y"}}</span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </li>
+        {% endfor %}
+        {% for item in items.files %}
+        <li class="group" id="{{item.id}}">
+            <a href="{{item.file}}" download="{{item.name}}" class="active:bg-indigo-500">
+                <div class="flex flex-row gap-x-4">
+                    <label for="check-{{item.id}}" class="flex items-center">
+                        <input id="check-{{item.id}}" type="checkbox" class="peer hidden" />
+                        <span 
+                                                                      class="w-4 h-4 peer-checked:bg-indigo-500 border-2  border-neutral-300 dark:border-neutral-600 peer-checked:border-indigo-500 ring-offset-2 peer-focus:ring peer-focus:ring-indigo-400  rounded flex items-center justify-center cursor-pointer">
+                    </label>
+                    <div class="flex-1 flex flex-row items-center gap-4 py-1.5 border-b group-first:border-y border-neutral-300 dark:border-neutral-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-file-text"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        <div class="flex-1">
+                            <h4 class="font-[NeueMontrealMedium]">{{item.name}}</h4>
+                            <div class="flex flex-row justify-between items-center">
+                                <span class="text-sm opacity-75">{{item.created_at|format_date:"%b %d %a, %Y"}}</span>
+                                <span class="text-sm opacity-75">{{item.size|format_size}}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <h3 class="text-2xl font-[RoobertMedium] text-center mt-6 opacity-50">No content to display :(</h3>
+    {% endif %}
+</div>

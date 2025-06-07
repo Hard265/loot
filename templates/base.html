@@ -1,0 +1,22 @@
+{% load static %}
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}{% endblock %}</title>
+        <link rel="stylesheet" href="{% static 'css/main.css' %}" />
+        <script src="{% static 'libs/tailwindcss/4.1.8/lib.js' %}"></script>
+        <style type="text/tailwindcss">
+            @layer utilities {
+                .bg-background {
+                    @apply bg-white dark:bg-black;
+                }
+            }
+        </style>
+    </head>
+    <body class="bg-background text-gray-900 dark:text-gray-100 font-[NeueMontrealRegular] text-base">
+        {% block content %} {% endblock %}
+    </body>
+</html>

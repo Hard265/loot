@@ -6,6 +6,16 @@ from accounts.serializers import RegisterSerializer, TokenObtainSerializer, User
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth.views import LoginView
+
+
+class SignInView(LoginView):
+    template_name = 'accounts/sign-in.html'
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        return self.request.GET.get('next', '/')
+
 
 class TokenObtainView(TokenObtainPairView):
     serializer_class = TokenObtainSerializer

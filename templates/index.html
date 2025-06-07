@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %} Loot | Home {% endblock %}
+{% block content %}
+<div class="p-4">
+    <header>
+        {% include './components/avatar.html' with img=avatar size=12 %}
+    </header>
+    <h1 class="opacity-50 font-[RoobertBold]">Home Files</h1>
+    {% include "partials/folder-contents.html" with items=contents %}
+</div>
+{% endblock %}
